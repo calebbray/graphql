@@ -85,6 +85,8 @@ const typeDefs = `
 
   type Mutation {
     createUser(name: String!, email: String!, age: Int): User!
+    createPost(title: String!, body: String!, published: Boolean!, author: ID!): Post!
+    createComment(text: String!, author: ID!, post: ID!): Comment!
   }
 
   type User {
@@ -132,9 +134,7 @@ const resolvers = {
         return users;
       }
 
-      return users.filter(user =>
-        user.name.toLowerCase().includes(args.query.toLowerCase())
-      );
+      return users.filter(user => user.name.toLowerCase().includes(args.query.toLowerCase()));
     },
     comments(parent, args, ctx, info) {
       return comments;
@@ -176,6 +176,46 @@ const resolvers = {
 
       users.push(user);
       return user;
+    },
+
+    createPost(parent, args, ctx, info) {
+      const { title, body, published, author } = args;
+      const userExists = users.some(user => user.id === author);
+
+      if (!userExists) {
+        throw new Error('User not found.');
+      }
+
+      const post = {
+        id: uuidv4(),
+        title,
+        body,
+        published,
+        author
+      };
+
+      posts.push(post);
+      return post;
+    },
+
+    createComment(parent, args, ctx, info) {
+      const { text, author, post } = args;
+      const userExists = users.some(user => user.id === author);
+      const postExists = posts.some(post => post.id === post);
+
+      if (!userExists || !postExists) {
+        throw new Error('User or post does not exist');
+      }
+
+      const comment = {
+        id: uuidv4(),
+        text,
+        author,
+        post
+      };
+
+      comments.push(comment);
+      return comment;
     }
   },
 
