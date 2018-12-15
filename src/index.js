@@ -2,7 +2,7 @@ import { GraphQLServer } from 'graphql-yoga';
 import uuidv4 from 'uuid/v4';
 
 // Demo Data
-const posts = [
+let posts = [
   {
     id: '1',
     title: 'Post One',
@@ -25,7 +25,8 @@ const posts = [
     author: '2'
   }
 ];
-const users = [
+
+let users = [
   {
     id: '1',
     name: 'Caleb',
@@ -46,7 +47,7 @@ const users = [
   }
 ];
 
-const comments = [
+let comments = [
   {
     id: '1',
     text: 'This is the first comment',
@@ -84,9 +85,31 @@ const typeDefs = `
   }
 
   type Mutation {
-    createUser(name: String!, email: String!, age: Int): User!
-    createPost(title: String!, body: String!, published: Boolean!, author: ID!): Post!
-    createComment(text: String!, author: ID!, post: ID!): Comment!
+    createUser(data: CreateUserInput): User!
+    deleteUser(id: ID!): User!
+    createPost(data: CreatePostInput): Post!
+    deletePost(id: ID!): Post!
+    createComment(data: CreateCommentInput): Comment!
+    deleteComment(id: ID!): Comment!
+  }
+
+  input CreateUserInput {
+    name: String!
+    email: String!
+    age: Int
+  }
+
+  input CreatePostInput {
+    title: String!
+    body: String!
+    published: Boolean!
+    author: ID!
+  }
+
+  input CreateCommentInput {
+    text: String!
+    author: ID!
+    post: ID!
   }
 
   type User {
@@ -134,7 +157,9 @@ const resolvers = {
         return users;
       }
 
-      return users.filter(user => user.name.toLowerCase().includes(args.query.toLowerCase()));
+      return users.filter(user =>
+        user.name.toLowerCase().includes(args.query.toLowerCase())
+      );
     },
     comments(parent, args, ctx, info) {
       return comments;
@@ -160,8 +185,7 @@ const resolvers = {
 
   Mutation: {
     createUser(parent, args, ctx, info) {
-      const { name, email, age } = args;
-      const emailTaken = users.some(user => user.email === email);
+      const emailTaken = users.some(user => user.email === args.data.email);
 
       if (emailTaken) {
         throw new Error('Email already taken. Please try again.');
@@ -169,18 +193,37 @@ const resolvers = {
 
       const user = {
         id: uuidv4(),
-        name,
-        email,
-        age
+        ...args.data
       };
 
       users.push(user);
       return user;
     },
 
+    deleteUser(parent, args, ctx, info) {
+      const userIndex = users.findIndex(user => user.id === args.id);
+
+      if (userIndex === -1) {
+        throw new Error('User not found.');
+      }
+
+      const deletedUser = users.splice(userIndex, 1);
+      posts = posts.filter(post => {
+        const match = post.author === args.id;
+        if (match) {
+          comments = comments.filter(comment => comment.author !== args.id);
+        }
+
+        return !match;
+      });
+
+      comments = comments.filter(comment => comment.author !== args.id);
+
+      return deletedUser[0];
+    },
+
     createPost(parent, args, ctx, info) {
-      const { title, body, published, author } = args;
-      const userExists = users.some(user => user.id === author);
+      const userExists = users.some(user => user.id === args.data.author);
 
       if (!userExists) {
         throw new Error('User not found.');
@@ -188,20 +231,29 @@ const resolvers = {
 
       const post = {
         id: uuidv4(),
-        title,
-        body,
-        published,
-        author
+        ...args.data
       };
 
       posts.push(post);
       return post;
     },
 
+    deletePost(parent, args, ctx, info) {
+      const postIndex = posts.findIndex(post => post.id === args.id);
+
+      if (postIndex === -1) {
+        throw new Error('Post not found.');
+      }
+
+      const deletedPost = posts.splice(postIndex, 1);
+      comments = comments.filter(comment => comment.post !== args.id);
+
+      return deletedPost[0];
+    },
+
     createComment(parent, args, ctx, info) {
-      const { text, author, post } = args;
-      const userExists = users.some(user => user.id === author);
-      const postExists = posts.some(post => post.id === post);
+      const userExists = users.some(user => user.id === args.data.author);
+      const postExists = posts.some(post => post.id === args.data.post);
 
       if (!userExists || !postExists) {
         throw new Error('User or post does not exist');
@@ -209,13 +261,25 @@ const resolvers = {
 
       const comment = {
         id: uuidv4(),
-        text,
-        author,
-        post
+        ...args.data
       };
 
       comments.push(comment);
       return comment;
+    },
+
+    deleteComment(parent, args, ctx, info) {
+      const commentIndex = comments.findIndex(
+        comment => comment.id === args.id
+      );
+
+      if (commentIndex === -1) {
+        throw new Error('Comment not found.');
+      }
+
+      const deletedComment = comments.splice(commentIndex, 1);
+      comments = comments.filter(comment => comment.id !== args.id);
+      return deletedComment[0];
     }
   },
 
